@@ -1,0 +1,30 @@
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '8.3.0'   // 不需要 application 插件
+}
+
+group = 'fredoseep.biliupload'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // 你的依赖保持不变
+    testImplementation platform('org.junit:junit-bom:6.0.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    implementation 'com.microsoft.playwright:playwright:1.61.0'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+shadowJar {
+    manifest {
+        attributes 'Main-Class': 'fredoseep.chaoxingauto.Main'   // 硬编码主类
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
