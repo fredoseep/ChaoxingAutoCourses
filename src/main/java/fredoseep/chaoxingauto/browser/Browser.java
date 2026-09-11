@@ -95,7 +95,8 @@ public class Browser {
         System.out.println(Config.courseToOperate.getFirst());
 
         try (Playwright playwright = Playwright.create()) {
-            Path userDataDir = Paths.get("/home/fredoseep/.playwright_bili_data");
+            String userHome = System.getProperty("user.home");
+            Path userDataDir = Paths.get(userHome, ".playwright_bili_data");
             BrowserType.LaunchPersistentContextOptions options = new BrowserType.LaunchPersistentContextOptions()
                     .setHeadless(false)
                     .setChannel("chrome");
