@@ -195,19 +195,53 @@ public class Browser {
                     // 强制精准点击目标节点，确保右侧 iframe 加载对应的界面
                     validPoint.locator("..").click();
                     System.out.println("等待右侧课程内容加载完成...");
-                    Thread.sleep(3000);
-                    coursePage.waitForLoadState();
+
+                    // ================= 核心修复：轮询探测任务类型 =================
+                    boolean isTest = false;
+                    boolean isVideo = false;
+                    int waitLoadCount = 0;
+
+                    // 最多等待 15 秒（15 * 1000ms）
+                    while (waitLoadCount < 15) {
+                        // 探测 1：是否刷出了章节测验
+                        if (coursePage.getByText("章节测验", new Page.GetByTextOptions().setExact(true)).count() > 0) {
+                            isTest = true;
+                            break; // 确认是测验，立刻跳出等待
+                        }
+
+                        // 探测 2：是否刷出了视频播放器
+                        try {
+                            Locator playBtn = coursePage.locator("#iframe").contentFrame().locator("iframe").contentFrame().getByRole(AriaRole.BUTTON, new FrameLocator.GetByRoleOptions().setName("播放视频"));
+                            if (playBtn.isVisible()) {
+                                isVideo = true;
+                                break; // 确认是视频，立刻跳出等待
+                            }
+                        } catch (Exception e) {
+                            // 忽略 iframe 尚未挂载时的 Playwright 报错，让其继续循环等待
+                        }
+
+                        System.out.println("正在探测页面类型，等待渲染...");
+                        Thread.sleep(1000);
+                        waitLoadCount++;
+
+                        // 防假死策略：每等 5 秒还没结果，就重新点击一次左侧任务点，逼迫网页重新拉取数据
+                        if (waitLoadCount % 5 == 0) {
+                            System.out.println("右侧渲染迟缓，尝试重新点击目标任务点...");
+                            validPoint.locator("..").click();
+                        }
+                    }
+                    // ==============================================================
 
                     boolean expectCountDecrease = true;
 
-                    if (coursePage.getByText("章节测验", new Page.GetByTextOptions().setExact(true)).count() > 0) {
+                    if (isTest) {
                         System.out.println("Chapter test found...");
                         if (!Config.autoDeepseekTheQuestion) {
                             System.out.println("自动答题已关闭，跳过测试并加入排除名单...");
                             fredoseep.chaoxingauto.file.FileInitialize.addExcludedId(currentCourseName, currentPointId);
                             expectCountDecrease = false;
                         } else {
-                            // 调用答题引擎，根据返回的 boolean 判断是否真正提交完成
+                            // 调用答题引擎
                             boolean submitted = QuestionEngine.QuestionAnswerWorkFlow(coursePage, deepseekPage);
                             if (!submitted) {
                                 System.out.println("仅保存或未答完，打入排除黑名单...");
@@ -215,13 +249,9 @@ public class Browser {
                                 expectCountDecrease = false;
                             }
                         }
-                    } else {
+                    } else if (isVideo) {
                         // ================= 看视频逻辑 =================
                         Locator playButton = coursePage.locator("#iframe").contentFrame().locator("iframe").contentFrame().getByRole(AriaRole.BUTTON, new FrameLocator.GetByRoleOptions().setName("播放视频"));
-                        while (!playButton.isVisible()) {
-                            System.out.println("Waiting for the video player to load...");
-                            Thread.sleep(500);
-                        }
                         System.out.println("Trying to play the video...");
                         playButton.click();
 
@@ -248,6 +278,11 @@ public class Browser {
                         }
                         System.out.println("Video process finished.");
                         expectCountDecrease = true;
+                    } else {
+                        // 兜底：既不是测验也不是视频，直接拉黑，防止程序在视频循环里卡死
+                        System.out.println("警告：15秒内未能识别出测验或视频，将其加入黑名单...");
+                        fredoseep.chaoxingauto.file.FileInitialize.addExcludedId(currentCourseName, currentPointId);
+                        expectCountDecrease = false;
                     }
 
                     // ================= 结算与洗白状态 =================
